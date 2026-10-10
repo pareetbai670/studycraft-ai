@@ -1,0 +1,92 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 240 20% 99%;
+    --foreground: 240 10% 10%;
+    --card: 0 0% 100%;
+    --card-foreground: 240 10% 10%;
+    --primary: 262 83% 58%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 240 5% 96%;
+    --secondary-foreground: 240 10% 20%;
+    --muted: 240 5% 96%;
+    --muted-foreground: 240 4% 46%;
+    --accent: 262 83% 96%;
+    --accent-foreground: 262 83% 40%;
+    --destructive: 0 72% 51%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 240 6% 90%;
+    --input: 240 6% 90%;
+    --ring: 262 83% 58%;
+    --radius: 0.75rem;
+  }
+
+  .dark {
+    --background: 240 10% 8%;
+    --foreground: 0 0% 98%;
+    --card: 240 10% 11%;
+    --card-foreground: 0 0% 98%;
+    --primary: 262 83% 66%;
+    --primary-foreground: 240 10% 8%;
+    --secondary: 240 6% 16%;
+    --secondary-foreground: 0 0% 98%;
+    --muted: 240 6% 16%;
+    --muted-foreground: 240 5% 65%;
+    --accent: 262 40% 22%;
+    --accent-foreground: 0 0% 98%;
+    --destructive: 0 62% 50%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 240 6% 20%;
+    --input: 240 6% 22%;
+    --ring: 262 83% 66%;
+  }
+
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground antialiased;
+    font-feature-settings: "rlig" 1, "calt" 1;
+  }
+}
+
+/* 3D flip-card support for flashcards */
+.perspective {
+  perspective: 1200px;
+}
+.flip-card-inner {
+  transform-style: preserve-3d;
+  transition: transform 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.flip-card-inner.is-flipped {
+  transform: rotateY(180deg);
+}
+.flip-face {
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+}
+.flip-face-back {
+  transform: rotateY(180deg);
+}
+
+/* Print layout for worksheets & summaries */
+@media print {
+  body * {
+    visibility: hidden;
+  }
+  #print-area,
+  #print-area * {
+    visibility: visible;
+  }
+  #print-area {
+    position: absolute;
+    inset: 0;
+    padding: 2rem;
+  }
+  .no-print {
+    display: none !important;
+  }
+}

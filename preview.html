@@ -1,0 +1,407 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>StudyCraft AI — Standalone Preview</title>
+    <!--
+      SELF-CONTAINED PREVIEW
+      ----------------------
+      This single file demonstrates the real StudyCraft AI UI and all five
+      interactive renderers (Quiz, Flashcards, Mind Map, Worksheet, Summary)
+      with NO install and NO backend. It uses React via CDN and the same
+      mock-data shapes the FastAPI backend produces. Just open it in a browser.
+
+      The full app (with the Python/FastAPI backend + local LLMs) lives in
+      backend/ and frontend/ — see README.md to run that version.
+    -->
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+      :root {
+        --primary: #7c3aed;
+        --primary-fg: #ffffff;
+        --bg: #fafafb;
+        --card: #ffffff;
+        --border: #e6e6ea;
+        --muted: #6b7280;
+      }
+      body { background: var(--bg); color: #18181b; }
+      .perspective { perspective: 1200px; }
+      .flip-card-inner { transform-style: preserve-3d; transition: transform .6s cubic-bezier(.4,0,.2,1); position: relative; }
+      .flip-card-inner.is-flipped { transform: rotateY(180deg); }
+      .flip-face { backface-visibility: hidden; -webkit-backface-visibility: hidden; }
+      .flip-face-back { transform: rotateY(180deg); }
+      .fade-in { animation: fade-in .3s ease-out; }
+      @keyframes fade-in { from { opacity: 0; transform: translateY(6px);} to { opacity:1; transform:none;} }
+      @media print { body * { visibility: hidden; } #print-area, #print-area * { visibility: visible; } #print-area { position:absolute; inset:0; padding:2rem;} .no-print{display:none !important;} }
+    </style>
+  </head>
+  <body>
+    <div id="root"></div>
+
+    <script type="text/babel" data-presets="react">
+      const { useState, useEffect, useMemo } = React;
+
+      /* ------------------------------------------------------------------ *
+       * Mock data — mirrors the backend's strict JSON contract (one per type)
+       * ------------------------------------------------------------------ */
+      const SAMPLE_TITLE = "Study Set: Photosynthesis, Chlorophyll, Calvin";
+
+      const DATA = {
+        quiz: {
+          title: SAMPLE_TITLE, type: "quiz",
+          questions: [
+            { question: "Which statement best describes the role of 'Photosynthesis' in the material?", type: "multiple_choice",
+              options: ["It converts light energy into chemical energy", "It is unrelated to chlorophyll", "It only occurs in animals", "It destroys glucose"],
+              answer: "It converts light energy into chemical energy",
+              explanation: "Photosynthesis converts light energy into chemical energy stored in glucose." },
+            { question: "True or False: 'Chlorophyll' absorbs sunlight during the light-dependent reactions.", type: "true_false",
+              options: ["True", "False"], answer: "True",
+              explanation: "Chlorophyll in the thylakoid membranes absorbs sunlight to drive the reaction." },
+            { question: "In one sentence, explain the significance of the 'Calvin cycle'.", type: "short_answer",
+              options: [], answer: "The Calvin cycle fixes carbon dioxide into glucose using ATP and NADPH.",
+              explanation: "Short-answer items check recall and understanding." },
+            { question: "Which process produces ATP, NADPH, and oxygen?", type: "multiple_choice",
+              options: ["Light-dependent reactions", "The Calvin cycle", "Respiration", "Transpiration"],
+              answer: "Light-dependent reactions",
+              explanation: "The light-dependent reactions split water and generate ATP, NADPH, and O2." },
+          ],
+        },
+        flashcards: {
+          title: SAMPLE_TITLE, type: "flashcards",
+          cards: [
+            { front: "What is 'Photosynthesis'?", back: "The process by which green plants convert light energy into chemical energy stored in glucose.", hint: "Starts with 'P'." },
+            { front: "What is 'Chlorophyll'?", back: "The green pigment in chloroplasts that absorbs sunlight to power photosynthesis.", hint: "Starts with 'C'." },
+            { front: "What is the 'Calvin cycle'?", back: "Light-independent reactions in the stroma that fix CO2 into glucose using ATP and NADPH.", hint: "Starts with 'C'." },
+            { front: "What is 'RuBisCO'?", back: "The enzyme that catalyzes the first step of carbon fixation in the Calvin cycle.", hint: "Starts with 'R'." },
+          ],
+        },
+        mindmap: {
+          title: SAMPLE_TITLE, type: "mindmap",
+          root: { title: "Photosynthesis", children: [
+            { title: "Light Reactions", children: [ {title:"Thylakoid", children:[]}, {title:"ATP & NADPH", children:[]}, {title:"Oxygen", children:[]} ] },
+            { title: "Calvin Cycle", children: [ {title:"Stroma", children:[]}, {title:"RuBisCO", children:[]}, {title:"Glucose", children:[]} ] },
+            { title: "Limiting Factors", children: [ {title:"Light", children:[]}, {title:"CO2", children:[]}, {title:"Temperature", children:[]} ] },
+          ] },
+        },
+        worksheet: {
+          title: SAMPLE_TITLE, type: "worksheet",
+          instructions: "Complete each exercise. Check your answers against the provided solutions.",
+          exercises: [
+            { prompt: "The core idea of photosynthesis can be defined as ____.", type: "fill_blank", answer: "converting light energy into chemical energy stored in glucose", hint: "Review where photosynthesis is introduced." },
+            { prompt: "Briefly describe how chlorophyll applies to a real scenario.", type: "short_answer", answer: "Chlorophyll absorbs sunlight in leaves, enabling plants to make food.", hint: "Think of a concrete example." },
+            { prompt: "Work through a problem that uses the Calvin cycle together with ATP.", type: "practice_problem", answer: "The Calvin cycle consumes ATP and NADPH from the light reactions to fix CO2 step by step into glucose.", hint: "Break the problem into smaller parts." },
+          ],
+        },
+        summary: {
+          title: SAMPLE_TITLE, type: "summary",
+          executive_summary: "Photosynthesis converts light energy into chemical energy in chloroplasts. It runs in two stages — the light-dependent reactions and the Calvin cycle — and underpins most food chains and atmospheric oxygen.",
+          key_takeaways: [
+            "Photosynthesis is a central idea in the material.",
+            "Chlorophyll absorbs the sunlight that powers the reaction.",
+            "The Calvin cycle fixes CO2 into glucose using ATP and NADPH.",
+            "Light intensity, CO2, and temperature are limiting factors.",
+          ],
+          sections: [
+            { heading: "Core Concepts", points: ["Occurs mainly in chloroplasts.", "Light reactions happen in the thylakoid membranes.", "The Calvin cycle happens in the stroma."] },
+            { heading: "Supporting Details", points: ["Oxygen is released as a byproduct.", "RuBisCO catalyzes the first carbon fixation.", "Photosynthesis drives the global carbon cycle."] },
+          ],
+        },
+      };
+
+      /* ------------------------------- UI atoms ------------------------------- */
+      const Badge = ({ children, tone = "secondary" }) => {
+        const tones = {
+          secondary: "bg-gray-100 text-gray-700",
+          primary: "bg-violet-600 text-white",
+          success: "bg-emerald-500 text-white",
+          warning: "bg-amber-500 text-white",
+          outline: "border border-gray-300 text-gray-700",
+        };
+        return <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-semibold ${tones[tone]}`}>{children}</span>;
+      };
+      const Card = ({ children, className = "" }) => <div className={`rounded-xl border bg-white shadow-sm ${className}`} style={{borderColor:"var(--border)"}}>{children}</div>;
+      const Btn = ({ children, onClick, variant = "default", disabled, className = "" }) => {
+        const v = {
+          default: "bg-violet-600 text-white hover:bg-violet-700",
+          outline: "border border-gray-300 bg-white hover:bg-gray-50",
+          secondary: "bg-gray-100 hover:bg-gray-200",
+        };
+        return <button onClick={onClick} disabled={disabled} className={`inline-flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-medium transition disabled:opacity-50 ${v[variant]} ${className}`}>{children}</button>;
+      };
+
+      /* ------------------------------ Renderers ------------------------------ */
+      function QuizRenderer({ quiz }) {
+        const [answers, setAnswers] = useState({});
+        const [revealed, setRevealed] = useState({});
+        const eq = (a, b) => b && a.trim().toLowerCase() === b.trim().toLowerCase();
+        const score = useMemo(() => quiz.questions.reduce((n, q, i) => n + (revealed[i] && eq(q.answer, answers[i]) ? 1 : 0), 0), [answers, revealed]);
+        const answered = Object.keys(revealed).length;
+        const choose = (qi, opt) => { if (revealed[qi]) return; setAnswers(a => ({...a,[qi]:opt})); setRevealed(r => ({...r,[qi]:true})); };
+        return (
+          <div className="space-y-4">
+            <div className="flex items-center justify-between rounded-xl border bg-white p-4" style={{borderColor:"var(--border)"}}>
+              <div><h2 className="text-xl font-bold">{quiz.title}</h2><p className="text-sm text-gray-500">{answered}/{quiz.questions.length} answered</p></div>
+              <div className="flex items-center gap-3">
+                <Badge tone={score===quiz.questions.length&&answered===quiz.questions.length?"success":"secondary"}>Score: {score}/{quiz.questions.length}</Badge>
+                <Btn variant="outline" onClick={()=>{setAnswers({});setRevealed({});}}>↺ Reset</Btn>
+              </div>
+            </div>
+            {quiz.questions.map((q, qi) => {
+              const picked = answers[qi], rv = revealed[qi];
+              return (
+                <Card key={qi} className="fade-in p-5">
+                  <div className="mb-3 flex items-start gap-2 font-semibold">
+                    <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-violet-600 text-xs text-white">{qi+1}</span>
+                    <span>{q.question}</span>
+                  </div>
+                  {q.options.length ? (
+                    <div className="grid gap-2">
+                      {q.options.map((opt, oi) => {
+                        const correct = eq(q.answer, opt), chosen = picked===opt;
+                        let cls = "border-gray-200 hover:border-violet-500 hover:bg-violet-50";
+                        if (rv && correct) cls = "border-emerald-500 bg-emerald-50";
+                        else if (rv && chosen && !correct) cls = "border-red-500 bg-red-50";
+                        else if (rv) cls = "opacity-60";
+                        return <button key={oi} disabled={rv} onClick={()=>choose(qi,opt)} className={`flex items-center justify-between rounded-lg border p-3 text-left text-sm transition ${cls}`}>
+                          <span>{opt}</span>{rv&&correct&&<span className="text-emerald-600">✓</span>}{rv&&chosen&&!correct&&<span className="text-red-600">✕</span>}
+                        </button>;
+                      })}
+                    </div>
+                  ) : (
+                    <ShortAnswer rv={rv} val={picked} answer={q.answer} onReveal={(v)=>choose(qi,v)} />
+                  )}
+                  {rv && q.explanation && <div className="mt-3 rounded-lg bg-gray-100 p-3 text-sm"><b>Explanation: </b>{q.explanation}</div>}
+                </Card>
+              );
+            })}
+          </div>
+        );
+      }
+      function ShortAnswer({ rv, val, answer, onReveal }) {
+        const [draft, setDraft] = useState("");
+        return (
+          <div className="space-y-2">
+            <textarea disabled={rv} value={rv?val:draft} onChange={e=>setDraft(e.target.value)} placeholder="Type your answer…" className="min-h-[70px] w-full rounded-md border p-3 text-sm disabled:opacity-70" style={{borderColor:"var(--border)"}} />
+            {!rv ? <Btn variant="secondary" onClick={()=>onReveal(draft)}>Reveal model answer</Btn>
+                 : <div className="rounded-lg border border-emerald-500 bg-emerald-50 p-3 text-sm"><b>Model answer: </b>{answer}</div>}
+          </div>
+        );
+      }
+
+      function FlashcardRenderer({ deck }) {
+        const [i, setI] = useState(0), [flip, setFlip] = useState(false), [hint, setHint] = useState(false);
+        const card = deck.cards[i], total = deck.cards.length;
+        const go = d => { setI(x => (x+d+total)%total); setFlip(false); setHint(false); };
+        return (
+          <div className="mx-auto flex max-w-xl flex-col items-center gap-6">
+            <div className="flex w-full items-center justify-between"><h2 className="text-xl font-bold">{deck.title}</h2><Badge>{i+1} / {total}</Badge></div>
+            <div className="perspective w-full">
+              <button onClick={()=>setFlip(f=>!f)} className="block h-72 w-full cursor-pointer">
+                <div className={`flip-card-inner h-full w-full ${flip?"is-flipped":""}`}>
+                  <div className="flip-face absolute inset-0 flex flex-col items-center justify-center rounded-2xl border bg-white p-8 text-center shadow-md" style={{borderColor:"var(--border)"}}>
+                    <span className="mb-3 text-xs font-semibold uppercase tracking-wide text-violet-600">Front</span>
+                    <p className="text-xl font-medium">{card.front}</p>
+                    <span className="mt-6 text-xs text-gray-400">↻ Click to flip</span>
+                  </div>
+                  <div className="flip-face flip-face-back absolute inset-0 flex flex-col items-center justify-center rounded-2xl bg-violet-600 p-8 text-center text-white shadow-md">
+                    <span className="mb-3 text-xs font-semibold uppercase tracking-wide opacity-80">Back</span>
+                    <p className="text-lg leading-relaxed">{card.back}</p>
+                  </div>
+                </div>
+              </button>
+            </div>
+            <div className="min-h-[28px] text-center text-sm">
+              {hint ? <span className="text-gray-500">💡 {card.hint}</span> : <button className="text-gray-500 hover:text-black" onClick={()=>setHint(true)}>💡 Show hint</button>}
+            </div>
+            <div className="flex items-center gap-3">
+              <Btn variant="outline" onClick={()=>go(-1)}>‹ Previous</Btn>
+              <Btn variant="secondary" onClick={()=>setFlip(f=>!f)}>↻ Flip</Btn>
+              <Btn variant="outline" onClick={()=>go(1)}>Next ›</Btn>
+            </div>
+          </div>
+        );
+      }
+
+      function Tree({ node, depth = 0 }) {
+        return (
+          <ul className={depth===0?"space-y-1":"ml-5 mt-1 space-y-1 border-l pl-4"} style={{borderColor:"var(--border)"}}>
+            <li>
+              <span className={depth===0?"font-bold text-violet-600":depth===1?"font-semibold":"text-sm"}>{node.title}</span>
+              {node.children?.map((c,i)=><Tree key={i} node={c} depth={depth+1} />)}
+            </li>
+          </ul>
+        );
+      }
+      function MindMapRenderer({ map }) {
+        return (
+          <div className="space-y-4">
+            <h2 className="text-xl font-bold">{map.title}</h2>
+            <Card className="p-6"><Tree node={map.root} /></Card>
+            <p className="text-xs text-gray-400">In the full app this also renders as a Mermaid.js diagram (tab).</p>
+          </div>
+        );
+      }
+
+      function WorksheetRenderer({ ws }) {
+        const [show, setShow] = useState(false);
+        const label = {fill_blank:"Fill in the blank", short_answer:"Short answer", practice_problem:"Practice problem"};
+        return (
+          <div id="print-area" className="space-y-6">
+            <div className="flex items-start justify-between">
+              <div><h2 className="text-2xl font-bold">{ws.title}</h2><p className="mt-1 max-w-2xl text-sm text-gray-500">{ws.instructions}</p></div>
+              <Btn variant="outline" className="no-print" onClick={()=>setShow(s=>!s)}>{show?"Hide answers":"Show answers"}</Btn>
+            </div>
+            <ol className="space-y-5">
+              {ws.exercises.map((ex,i)=>(
+                <li key={i} className="rounded-xl border bg-white p-5" style={{borderColor:"var(--border)"}}>
+                  <div className="mb-2 flex items-center gap-2">
+                    <span className="flex h-6 w-6 items-center justify-center rounded-full bg-violet-600 text-xs text-white">{i+1}</span>
+                    <Badge tone="outline">{label[ex.type]||ex.type}</Badge>
+                  </div>
+                  <p className="text-[15px]">{ex.prompt}</p>
+                  {ex.type!=="fill_blank" && <div className="mt-3 h-16 rounded-md border border-dashed bg-gray-50" />}
+                  {ex.hint && <p className="mt-2 text-xs text-gray-500">💡 {ex.hint}</p>}
+                  {show && <div className="mt-3 rounded-lg border border-emerald-500 bg-emerald-50 p-3 text-sm"><b>Answer: </b>{ex.answer}</div>}
+                </li>
+              ))}
+            </ol>
+          </div>
+        );
+      }
+
+      function SummaryRenderer({ s }) {
+        return (
+          <div id="print-area" className="space-y-6">
+            <h2 className="text-2xl font-bold">{s.title}</h2>
+            <Card className="p-6"><h3 className="mb-2 font-semibold">Executive Summary</h3><p className="leading-relaxed text-gray-700">{s.executive_summary}</p></Card>
+            <Card className="p-6"><h3 className="mb-2 font-semibold">Key Takeaways</h3>
+              <ul className="space-y-2">{s.key_takeaways.map((k,i)=><li key={i} className="flex items-start gap-2 text-sm"><span className="mt-0.5 text-emerald-500">✓</span>{k}</li>)}</ul>
+            </Card>
+            {s.sections.map((sec,i)=>(
+              <Card key={i} className="p-6"><h3 className="mb-2 font-semibold">{sec.heading}</h3>
+                <ul className="list-disc space-y-1.5 pl-5 text-sm">{sec.points.map((p,j)=><li key={j}>{p}</li>)}</ul>
+              </Card>
+            ))}
+          </div>
+        );
+      }
+
+      /* --------------------------------- App --------------------------------- */
+      const TYPES = [
+        { v:"worksheet", label:"Worksheets", desc:"Fill-in-the-blanks & practice", icon:"📝" },
+        { v:"quiz", label:"Quizzes", desc:"MCQ, short answer, true/false", icon:"✅" },
+        { v:"flashcards", label:"Flashcards", desc:"Interactive front/back cards", icon:"🗂️" },
+        { v:"mindmap", label:"Mind Maps", desc:"Visual tree & outline", icon:"🌳" },
+        { v:"summary", label:"Main Points", desc:"Takeaways & summaries", icon:"✨" },
+      ];
+      const DIFF = ["beginner","intermediate","advanced","expert"];
+      const STYLE = ["analytical","theoretical","practical","mixed"];
+      const LEVEL = ["high_school","undergraduate","postgraduate","general"];
+
+      function App() {
+        const [type, setType] = useState("quiz");
+        const [diff, setDiff] = useState("intermediate");
+        const [style, setStyle] = useState("mixed");
+        const [level, setLevel] = useState("undergraduate");
+        const [count, setCount] = useState(8);
+        const [result, setResult] = useState(null);
+        const [loading, setLoading] = useState(false);
+
+        const generate = () => {
+          setLoading(true); setResult(null);
+          setTimeout(() => { setResult(type); setLoading(false); }, 500); // simulate backend latency
+        };
+
+        const Select = ({ value, onChange, options }) => (
+          <select value={value} onChange={e=>onChange(e.target.value)} className="h-10 w-full rounded-md border bg-white px-3 text-sm capitalize" style={{borderColor:"var(--border)"}}>
+            {options.map(o=><option key={o} value={o} className="capitalize">{o.replace("_"," ")}</option>)}
+          </select>
+        );
+
+        return (
+          <div className="min-h-screen">
+            <header className="no-print border-b bg-white/70 backdrop-blur" style={{borderColor:"var(--border)"}}>
+              <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-4">
+                <div className="flex items-center gap-3">
+                  <span className="rounded-xl bg-violet-600 p-2 text-white text-xl">🎓</span>
+                  <div><h1 className="text-lg font-bold leading-tight">StudyCraft AI</h1><p className="text-xs text-gray-500">Learning assets from your notes · powered by local LLMs</p></div>
+                </div>
+                <Badge tone="warning">⚡ Standalone Preview (mock data)</Badge>
+              </div>
+            </header>
+
+            <main className="mx-auto grid max-w-6xl gap-6 px-4 py-8 lg:grid-cols-[1fr_320px]">
+              <div className="space-y-6">
+                <Card className="p-6">
+                  <h3 className="mb-3 flex items-center gap-2 font-semibold">📄 Study Material</h3>
+                  <textarea readOnly className="min-h-[140px] w-full rounded-md border p-3 font-mono text-[13px] text-gray-600" style={{borderColor:"var(--border)"}}
+                    value={"# Photosynthesis\n\nPhotosynthesis converts light energy into chemical energy in chloroplasts, which contain chlorophyll. The light-dependent reactions produce ATP, NADPH, and oxygen; the Calvin cycle fixes CO2 into glucose using RuBisCO. Rate is affected by light, CO2, and temperature."} />
+                  <p className="mt-2 text-xs text-gray-400">Preview uses fixed sample notes. The full app accepts pasted text or .txt/.md/.pdf uploads.</p>
+                </Card>
+
+                <div className="space-y-3">
+                  <p className="font-semibold">1. Choose an asset type</p>
+                  <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+                    {TYPES.map(t=>(
+                      <button key={t.v} onClick={()=>setType(t.v)} className={`flex flex-col items-start gap-2 rounded-xl border p-4 text-left transition ${type===t.v?"border-violet-600 bg-violet-50 ring-1 ring-violet-600":"bg-white hover:bg-gray-50"}`} style={type!==t.v?{borderColor:"var(--border)"}:{}}>
+                        <span className={`rounded-lg p-2 text-lg ${type===t.v?"bg-violet-600":"bg-gray-100"}`}>{t.icon}</span>
+                        <span className="font-semibold leading-tight">{t.label}</span>
+                        <span className="text-xs text-gray-500">{t.desc}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {result && (
+                  <div className="fade-in space-y-4">
+                    <div className="no-print flex flex-wrap items-center justify-between gap-3 rounded-xl border bg-white p-3" style={{borderColor:"var(--border)"}}>
+                      <Badge tone="warning">🔧 Mock Mode · mock-generator</Badge>
+                      <div className="flex gap-2">
+                        {(result==="worksheet"||result==="summary") && <Btn variant="outline" onClick={()=>window.print()}>⬇ Export to PDF</Btn>}
+                        <Btn variant="outline" onClick={()=>alert("In the full app this downloads a .md file.")}>⬇ Export Markdown</Btn>
+                      </div>
+                    </div>
+                    {result==="quiz" && <QuizRenderer quiz={DATA.quiz} />}
+                    {result==="flashcards" && <FlashcardRenderer deck={DATA.flashcards} />}
+                    {result==="mindmap" && <MindMapRenderer map={DATA.mindmap} />}
+                    {result==="worksheet" && <WorksheetRenderer ws={DATA.worksheet} />}
+                    {result==="summary" && <SummaryRenderer s={DATA.summary} />}
+                  </div>
+                )}
+                {!result && !loading && <p className="rounded-xl border border-dashed p-8 text-center text-sm text-gray-400" style={{borderColor:"var(--border)"}}>Pick a type and click <b>Generate</b> to preview the rendered asset.</p>}
+              </div>
+
+              <aside className="no-print space-y-4 lg:sticky lg:top-6 lg:self-start">
+                <Card className="p-6">
+                  <h3 className="mb-4 flex items-center gap-2 font-semibold">⚙️ Customize</h3>
+                  <div className="space-y-4">
+                    <div><label className="mb-1 block text-sm font-medium">Difficulty Level</label><Select value={diff} onChange={setDiff} options={DIFF} /></div>
+                    <div><label className="mb-1 block text-sm font-medium">Question Style</label><Select value={style} onChange={setStyle} options={STYLE} /></div>
+                    <div><label className="mb-1 block text-sm font-medium">Academic Level</label><Select value={level} onChange={setLevel} options={LEVEL} /></div>
+                    <div>
+                      <div className="mb-1 flex items-center justify-between"><label className="text-sm font-medium">Item Count</label><span className="rounded bg-gray-100 px-2 py-0.5 text-sm font-semibold">{count}</span></div>
+                      <input type="range" min="5" max="20" value={count} onChange={e=>setCount(+e.target.value)} className="w-full accent-violet-600" />
+                      <div className="flex justify-between text-xs text-gray-400"><span>5</span><span>20</span></div>
+                    </div>
+                  </div>
+                </Card>
+                <Btn className="w-full py-3" onClick={generate} disabled={loading}>{loading?"Generating…":"✨ Generate"}</Btn>
+                <p className="text-center text-xs text-gray-400">Preview renders bundled sample output. Counts/difficulty are illustrative here.</p>
+              </aside>
+            </main>
+
+            <footer className="no-print border-t py-6 text-center text-xs text-gray-400" style={{borderColor:"var(--border)"}}>
+              StudyCraft AI · MIT Licensed · Standalone preview — full app runs FastAPI + React with local open-weight LLMs
+            </footer>
+          </div>
+        );
+      }
+
+      ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+    </script>
+  </body>
+</html>

@@ -1,0 +1,24 @@
+# Render Blueprint — deploys the StudyCraft AI FastAPI backend.
+# How to use:
+#   1. Push this repo to GitHub.
+#   2. On https://render.com → New → Blueprint → connect this repo.
+#   3. Render reads this file and provisions the service automatically.
+# Render serves prebuilt pydantic-core wheels (Python 3.12), so there is NO
+# Rust/maturin source build — this avoids the error seen on Vercel.
+services:
+  - type: web
+    name: studycraft-ai-backend
+    runtime: python
+    rootDir: backend
+    plan: free
+    pythonVersion: "3.12"
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /health
+    envVars:
+      - key: LLM_PROVIDER
+        value: mock
+      # Allow your Vercel frontend to call this API. After deploying the
+      # frontend, set this to your real Vercel URL (comma-separated for multiple).
+      - key: CORS_ORIGINS
+        value: "*"
